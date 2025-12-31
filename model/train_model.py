@@ -20,6 +20,8 @@ required_columns = ["created","modified","deleted","renamed","high_entropy","lab
 for col in required_columns:
     if col not in data.columns:
         raise ValueError(f"The dataset does not contain a required column: '{col}'")
+# Load dataset to project
+data = pd.read_csv("dataset.csv")
 
 # Features and label
 X = data.drop("label", axis=1)
