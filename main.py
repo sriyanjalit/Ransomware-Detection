@@ -6,10 +6,10 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from features.entropy_calculator import calculate_entropy
 
-# -------- Load Trained XGBoost Model --------
-model = joblib.load("ml/xgboost_ransomware_model.pkl")
+# -------- Load Models --------
+rf_model = joblib.load("ml/ransomware_model.pkl")
+xgb_model = joblib.load("ml/xgboost_ransomware_model.pkl")
 
-# -------- Feature Counters --------
 event_stats = {
     "created": 0,
     "deleted": 0,
@@ -18,10 +18,9 @@ event_stats = {
     "high_entropy": 0
 }
 
-TIME_WINDOW = 10  # seconds
+TIME_WINDOW = 10
 
 
-# -------- Monitor Class --------
 class RealTimeMonitor(FileSystemEventHandler):
 
     def on_created(self, event):
@@ -45,7 +44,6 @@ class RealTimeMonitor(FileSystemEventHandler):
                 event_stats["high_entropy"] += 1
 
 
-# -------- Main Execution --------
 if __name__ == "__main__":
 
     path = input("📂 Enter directory path to monitor: ")
@@ -70,7 +68,6 @@ if __name__ == "__main__":
                 print("\n📊 Activity Summary (Last 10 sec):")
                 print(event_stats)
 
-                # Convert features to numpy array
                 features = np.array([[
                     event_stats["created"],
                     event_stats["modified"],
@@ -79,12 +76,23 @@ if __name__ == "__main__":
                     event_stats["high_entropy"]
                 ]])
 
-                prediction = model.predict(features)
+                # -------- Predictions --------
+                rf_pred = rf_model.predict(features)[0]
+                xgb_pred = xgb_model.predict(features)[0]
 
-                if prediction[0] == 1:
-                    print("🚨🚨 RANSOMWARE DETECTED 🚨🚨")
+                print("\n🔎 Model Predictions:")
+
+                print("Random Forest:",
+                      "🚨 Ransomware" if rf_pred == 1 else "✅ Normal")
+
+                print("XGBoost:",
+                      "🚨 Ransomware" if xgb_pred == 1 else "✅ Normal")
+
+                # Optional: Show agreement
+                if rf_pred == xgb_pred:
+                    print("🤝 Both models agree.")
                 else:
-                    print("✅ Normal Behavior")
+                    print("⚠ Models disagree!")
 
                 # Reset counters
                 for key in event_stats:
