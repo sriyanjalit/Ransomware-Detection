@@ -6,9 +6,8 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from features.entropy_calculator import calculate_entropy
 
-# -------- Load Models --------
+# Load trained model
 rf_model = joblib.load("ml/ransomware_model.pkl")
-xgb_model = joblib.load("ml/xgboost_ransomware_model.pkl")
 
 event_stats = {
     "created": 0,
@@ -38,25 +37,28 @@ class RealTimeMonitor(FileSystemEventHandler):
     def on_modified(self, event):
         if not event.is_directory and os.path.isfile(event.src_path):
             event_stats["modified"] += 1
-            entropy = calculate_entropy(event.src_path)
-
-            if entropy > 7.5:
-                event_stats["high_entropy"] += 1
+            try:
+                entropy = calculate_entropy(event.src_path)
+                if entropy > 7.5:
+                    event_stats["high_entropy"] += 1
+            except:
+                pass
 
 
 if __name__ == "__main__":
 
-    path = input("📂 Enter directory path to monitor: ")
+    path = input("Enter directory path to monitor: ")
 
     if not os.path.exists(path):
-        print("❌ Invalid directory!")
+        print("Invalid directory!")
         exit()
 
     observer = Observer()
     observer.schedule(RealTimeMonitor(), path, recursive=True)
     observer.start()
 
-    print(f"\n🔍 Monitoring started on: {path}")
+    print("Monitoring started on:", path)
+
     start_time = time.time()
 
     try:
@@ -65,7 +67,7 @@ if __name__ == "__main__":
 
             if time.time() - start_time >= TIME_WINDOW:
 
-                print("\n📊 Activity Summary (Last 10 sec):")
+                print("\nActivity Summary:")
                 print(event_stats)
 
                 features = np.array([[
@@ -76,25 +78,13 @@ if __name__ == "__main__":
                     event_stats["high_entropy"]
                 ]])
 
-                # -------- Predictions --------
-                rf_pred = rf_model.predict(features)[0]
-                xgb_pred = xgb_model.predict(features)[0]
+                prediction = rf_model.predict(features)[0]
 
-                print("\n🔎 Model Predictions:")
-
-                print("Random Forest:",
-                      "🚨 Ransomware" if rf_pred == 1 else "✅ Normal")
-
-                print("XGBoost:",
-                      "🚨 Ransomware" if xgb_pred == 1 else "✅ Normal")
-
-                # Optional: Show agreement
-                if rf_pred == xgb_pred:
-                    print("🤝 Both models agree.")
+                if prediction == 1:
+                    print("🚨 Ransomware Activity Detected!")
                 else:
-                    print("⚠ Models disagree!")
+                    print("✅ Normal Activity")
 
-                # Reset counters
                 for key in event_stats:
                     event_stats[key] = 0
 
@@ -103,4 +93,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         observer.stop()
         observer.join()
-        print("\n🛑 Monitoring stopped.")
+        print("Monitoring stopped.")
