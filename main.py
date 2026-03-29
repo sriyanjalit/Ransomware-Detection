@@ -1,14 +1,25 @@
 import time
 import os
-import numpy as np
+import pandas as pd
 import joblib
+import csv
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from features.entropy_calculator import calculate_entropy
 
-# Load trained model
+# ================= LOAD MODELS =================
 rf_model = joblib.load("ml/ransomware_model.pkl")
 
+# OPTIONAL: Load XGBoost
+try:
+    xgb_model = joblib.load("ml/xgboost_ransomware_model.pkl")
+    use_xgb = True
+except:
+    print("⚠ XGBoost model not found. Using only Random Forest.")
+    use_xgb = False
+
+
+# ================= FEATURE COUNTERS =================
 event_stats = {
     "created": 0,
     "deleted": 0,
@@ -17,9 +28,31 @@ event_stats = {
     "high_entropy": 0
 }
 
-TIME_WINDOW = 10
+TIME_WINDOW = 10  # seconds
+DATASET_FILE = "dataset/ransomware_fs_features.csv"
 
 
+# ================= SAVE DATASET =================
+def save_to_dataset(stats, label):
+    file_exists = os.path.isfile(DATASET_FILE)
+
+    with open(DATASET_FILE, "a", newline="") as f:
+        writer = csv.writer(f)
+
+        if not file_exists:
+            writer.writerow(["created", "modified", "deleted", "renamed", "high_entropy", "label"])
+
+        writer.writerow([
+            stats["created"],
+            stats["modified"],
+            stats["deleted"],
+            stats["renamed"],
+            stats["high_entropy"],
+            label
+        ])
+
+
+# ================= MONITOR CLASS =================
 class RealTimeMonitor(FileSystemEventHandler):
 
     def on_created(self, event):
@@ -45,19 +78,66 @@ class RealTimeMonitor(FileSystemEventHandler):
                 pass
 
 
+# ================= PREDICTION =================
+def predict_activity(stats):
+
+    features = pd.DataFrame([{
+        "created": stats["created"],
+        "modified": stats["modified"],
+        "deleted": stats["deleted"],
+        "renamed": stats["renamed"],
+        "high_entropy": stats["high_entropy"]
+    }])
+
+    print("\n📊 Activity Summary:")
+    print(stats)
+
+    # -------- Random Forest --------
+    rf_pred = rf_model.predict(features)[0]
+    rf_prob = rf_model.predict_proba(features)[0]
+
+    print("\n🌳 Random Forest:")
+    print(f"Prediction : {'🚨 Ransomware' if rf_pred else '✅ Normal'}")
+    print(f"Confidence : {max(rf_prob)*100:.2f}%")
+
+    # -------- XGBoost --------
+    if use_xgb:
+        xgb_pred = xgb_model.predict(features)[0]
+
+        print("\n⚡ XGBoost:")
+        print(f"Prediction : {'🚨 Ransomware' if xgb_pred else '✅ Normal'}")
+
+        final_pred = 1 if (rf_pred == 1 or xgb_pred == 1) else 0
+    else:
+        final_pred = rf_pred
+
+    # -------- FINAL RESULT --------
+    print("\n🚨 FINAL RESULT:")
+    if final_pred == 1:
+        print("🚨 POSSIBLE RANSOMWARE DETECTED!")
+    else:
+        print("✅ Normal Activity")
+
+    print("-" * 50)
+
+    return final_pred
+
+
+# ================= MAIN =================
 if __name__ == "__main__":
 
     path = input("Enter directory path to monitor: ")
 
     if not os.path.exists(path):
-        print("Invalid directory!")
+        print("❌ Invalid directory!")
         exit()
 
     observer = Observer()
     observer.schedule(RealTimeMonitor(), path, recursive=True)
     observer.start()
 
-    print("Monitoring started on:", path)
+    print(f"\n🔍 Monitoring started on: {path}")
+    print(f"⏱ Time Window: {TIME_WINDOW} seconds\n")
 
     start_time = time.time()
 
@@ -67,24 +147,18 @@ if __name__ == "__main__":
 
             if time.time() - start_time >= TIME_WINDOW:
 
-                print("\nActivity Summary:")
-                print(event_stats)
+                # Prediction
+                result = predict_activity(event_stats)
 
-                features = np.array([[
-                    event_stats["created"],
-                    event_stats["modified"],
-                    event_stats["deleted"],
-                    event_stats["renamed"],
-                    event_stats["high_entropy"]
-                ]])
+                # Ask for label (for dataset building)
+                try:
+                    label = int(input("Enter label (0=Normal, 1=Ransomware): "))
+                    save_to_dataset(event_stats, label)
+                    print("📁 Data saved to dataset!")
+                except:
+                    print("⚠ Skipped saving data.")
 
-                prediction = rf_model.predict(features)[0]
-
-                if prediction == 1:
-                    print("🚨 Ransomware Activity Detected!")
-                else:
-                    print("✅ Normal Activity")
-
+                # Reset counters
                 for key in event_stats:
                     event_stats[key] = 0
 
@@ -93,4 +167,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         observer.stop()
         observer.join()
-        print("Monitoring stopped.")
+        print("\n🛑 Monitoring stopped.")
