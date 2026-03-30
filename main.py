@@ -10,7 +10,6 @@ from features.entropy_calculator import calculate_entropy
 # ================= LOAD MODELS =================
 rf_model = joblib.load("ml/ransomware_model.pkl")
 
-# OPTIONAL: Load XGBoost
 try:
     xgb_model = joblib.load("ml/xgboost_ransomware_model.pkl")
     use_xgb = True
@@ -28,12 +27,14 @@ event_stats = {
     "high_entropy": 0
 }
 
-TIME_WINDOW = 10  # seconds
+TIME_WINDOW = 10
 DATASET_FILE = "dataset/ransomware_fs_features.csv"
 
 
 # ================= SAVE DATASET =================
 def save_to_dataset(stats, label):
+    os.makedirs("dataset", exist_ok=True)
+
     file_exists = os.path.isfile(DATASET_FILE)
 
     with open(DATASET_FILE, "a", newline="") as f:
@@ -52,7 +53,7 @@ def save_to_dataset(stats, label):
         ])
 
 
-# ================= MONITOR CLASS =================
+# ================= MONITOR =================
 class RealTimeMonitor(FileSystemEventHandler):
 
     def on_created(self, event):
@@ -70,12 +71,19 @@ class RealTimeMonitor(FileSystemEventHandler):
     def on_modified(self, event):
         if not event.is_directory and os.path.isfile(event.src_path):
             event_stats["modified"] += 1
+
             try:
                 entropy = calculate_entropy(event.src_path)
-                if entropy > 7.5:
+
+                # 🔥 DEBUG PRINT
+                print(f"📈 Entropy: {entropy:.2f} | File: {event.src_path}")
+
+                # 🔥 LOWER THRESHOLD (IMPORTANT)
+                if entropy > 6.0:
                     event_stats["high_entropy"] += 1
-            except:
-                pass
+
+            except Exception as e:
+                print("Entropy error:", e)
 
 
 # ================= PREDICTION =================
@@ -111,10 +119,14 @@ def predict_activity(stats):
     else:
         final_pred = rf_pred
 
+    # 🔥 EXTRA SAFETY RULE (IMPORTANT)
+    if stats["high_entropy"] > 0 and stats["modified"] > 10:
+        final_pred = 1
+
     # -------- FINAL RESULT --------
     print("\n🚨 FINAL RESULT:")
     if final_pred == 1:
-        print("🚨 POSSIBLE RANSOMWARE DETECTED!")
+        print("🚨🚨 RANSOMWARE DETECTED! 🚨🚨")
     else:
         print("✅ Normal Activity")
 
@@ -147,18 +159,12 @@ if __name__ == "__main__":
 
             if time.time() - start_time >= TIME_WINDOW:
 
-                # Prediction
                 result = predict_activity(event_stats)
 
-                # Ask for label (for dataset building)
-                try:
-                    label = int(input("Enter label (0=Normal, 1=Ransomware): "))
-                    save_to_dataset(event_stats, label)
-                    print("📁 Data saved to dataset!")
-                except:
-                    print("⚠ Skipped saving data.")
+                save_to_dataset(event_stats, result)
+                print("📁 Data saved automatically!")
 
-                # Reset counters
+                # reset
                 for key in event_stats:
                     event_stats[key] = 0
 
