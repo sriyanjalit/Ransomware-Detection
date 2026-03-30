@@ -75,11 +75,11 @@ class RealTimeMonitor(FileSystemEventHandler):
             try:
                 entropy = calculate_entropy(event.src_path)
 
-                # 🔥 DEBUG PRINT
+                # 🔍 Debug print
                 print(f"📈 Entropy: {entropy:.2f} | File: {event.src_path}")
 
-                # 🔥 LOWER THRESHOLD (IMPORTANT)
-                if entropy > 6.0:
+                # 🔥 Correct threshold for encrypted data
+                if entropy > 7.2:
                     event_stats["high_entropy"] += 1
 
             except Exception as e:
@@ -119,8 +119,11 @@ def predict_activity(stats):
     else:
         final_pred = rf_pred
 
-    # 🔥 EXTRA SAFETY RULE (IMPORTANT)
-    if stats["high_entropy"] > 0 and stats["modified"] > 10:
+    # 🔥 STRONG RULE-BASED DETECTION (FIXED POSITION)
+    if stats["high_entropy"] > 5:
+        final_pred = 1
+
+    if stats["modified"] > 50 and stats["high_entropy"] > 2:
         final_pred = 1
 
     # -------- FINAL RESULT --------
@@ -164,7 +167,7 @@ if __name__ == "__main__":
                 save_to_dataset(event_stats, result)
                 print("📁 Data saved automatically!")
 
-                # reset
+                # reset stats
                 for key in event_stats:
                     event_stats[key] = 0
 

@@ -36,7 +36,7 @@ def append_to_dataset(features):
 def run_ransomware_test():
     print("🚨 Running ransomware simulation...")
 
-    subprocess.run(["python", "simulate/simulate_ransomeware.py"])
+    subprocess.run(["python", "simulate/simulate_ransomware.py"])
     time.sleep(5)
 
     created = random.randint(5,15)
@@ -103,7 +103,7 @@ def run_combined_attack():
     print("🔥 Running ransomware + noise simultaneously...")
 
     t1 = threading.Thread(
-        target=lambda: subprocess.run(["python", "simulate/simulate_ransomeware.py"])
+        target=lambda: subprocess.run(["python", "simulate/simulate_ransomware.py"])
     )
 
     t2 = threading.Thread(target=simulate_noise)
@@ -128,8 +128,8 @@ def run_benign_test():
     created = random.randint(5,15)
     modified = random.randint(1,8)
     deleted = random.randint(0,2)
-    renamed = random.randint(0,2)
-    entropy = round(random.uniform(0.50,0.70),2)
+    renamed = random.randint(0,2)  # realistic encrypted entropy
+    entropy = round(random.uniform(3.5,5.5),2)
 
     return generate_features(created,modified,deleted,renamed,entropy,0)
 
@@ -160,7 +160,8 @@ if __name__ == "__main__":
             modified = random.randint(20,50)
             deleted = random.randint(1,6)
             renamed = random.randint(3,12)
-            entropy = round(random.uniform(0.85,0.99),2)
+            entropy = round(random.uniform(7.5,8.0),2)  # realistic encrypted entropy
+            
 
             features = generate_features(created,modified,deleted,renamed,entropy,1)
 

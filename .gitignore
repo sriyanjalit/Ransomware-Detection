@@ -12,5 +12,16 @@ Thumbs.db
 # Logs
 *.log
 
+# Encrypted/generated files
+*.encrypted*
+
+# Test data (keep folder, ignore contents)
+test_data/files/*
+!test_data/files/.gitkeep
+
 # Model files (optional)
-*.pkl
+# ml/*.pkl
+
+# Dataset temp files (optional)
+dataset/*.tmp
+dataset/*.backup

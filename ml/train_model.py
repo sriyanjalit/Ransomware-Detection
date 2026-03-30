@@ -5,7 +5,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
 # -------- Load Dataset --------
-data = pd.read_csv("dataset/ransomware_fs_features.csv")
+
+data = pd.read_csv("dataset/dataset.csv")
 
 X = data.drop("label", axis=1)
 y = data["label"]
